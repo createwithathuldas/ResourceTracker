@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - User Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-dark: #1a1a2e;
+            --secondary-dark: #16213e;
+            --accent: #0f3460;
+            --highlight: #e94560;
+        }
+        body {
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--secondary-dark) 100%);
+            min-height: 100vh;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            background: rgba(0,0,0,0.3) !important;
+            backdrop-filter: blur(10px);
+        }
+        .user-card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .user-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(233, 69, 96, 0.3);
+            border-color: var(--highlight);
+        }
+        .user-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--highlight);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .role-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .role-admin { background: var(--highlight); }
+        .role-user { background: #0f3460; }
+        .stats-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--highlight);
+        }
+        .chart-container {
+            background: rgba(255,255,255,0.05);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .alert-card {
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid;
+        }
+        .alert-danger { background: rgba(220,53,69,0.2); border-color: #dc3545; }
+        .alert-warning { background: rgba(255,193,7,0.2); border-color: #ffc107; }
+        .alert-info { background: rgba(13,202,240,0.2); border-color: #0dcaf0; }
+        .modal-content {
+            background: var(--secondary-dark);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .table-dark-custom {
+            background: rgba(0,0,0,0.3);
+        }
+        .table-dark-custom th {
+            background: var(--accent);
+            border: none;
+        }
+        .table-dark-custom td {
+            border-color: rgba(255,255,255,0.1);
+        }
+        .device-row {
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .device-row:hover {
+            background: rgba(233, 69, 96, 0.2) !important;
+        }
+        .progress {
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.1);
+        }
+        .section-title {
+            color: var(--highlight);
+            border-bottom: 2px solid var(--highlight);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-server me-2"></i>Device Manager
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="nav-link"><i class="fas fa-user-shield me-1"></i> Admin</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Stats Row -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="stats-number">{{ users|length }}</div>
+                    <div>Total Users</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="stats-number">{{ analytics.resource_usage|length }}</div>
+                    <div>Active Devices</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="stats-number text-danger">{{ alerts|selectattr('type', 'eq', 'danger')|list|length }}</div>
+                    <div>Critical Alerts</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card">
+                    <div class="stats-number text-warning">{{ alerts|selectattr('type', 'eq', 'warning')|list|length }}</div>
+                    <div>Warnings</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerts Section -->
+        {% if alerts %}
+        <div class="row mb-4">
+            <div class="col-12">
+                <h4 class="section-title"><i class="fas fa-bell me-2"></i>Resource Alerts</h4>
+                <div class="row">
+                    {% for alert in alerts %}
+                    <div class="col-md-6">
+                        <div class="alert-card alert-{{ alert.type }}">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong><i class="fas fa-{% if alert.type == 'danger' %}exclamation-triangle{% elif alert.type == 'warning' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>{{ alert.user }}</strong>
+                                    <div class="small">{{ alert.message }}</div>
+                                </div>
+                                <span class="badge bg-{{ 'danger' if alert.type == 'danger' else 'warning' if alert.type == 'warning' else 'info' }}">{{ alert.category }}</span>
+                            </div>
+                            <small class="text-muted">{{ alert.recommendation }}</small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="row">
+            <!-- Users Section -->
+            <div class="col-lg-8">
+                <h4 class="section-title"><i class="fas fa-users me-2"></i>Users</h4>
+                <div class="row">
+                    {% for user in users %}
+                    <div class="col-md-6">
+                        <div class="user-card" onclick="showUserDetails({{ user.id }})">
+                            <div class="d-flex align-items-center">
+                                <div class="user-avatar me-3">
+                                    {{ user.name[0]|upper }}
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h5 class="mb-1">{{ user.name }}</h5>
+                                    <small class="text-muted">{{ user.email }}</small>
+                                </div>
+                                <span class="role-badge role-{{ user.role }}">{{ user.role|upper }}</span>
+                            </div>
+                            <hr style="border-color: rgba(255,255,255,0.1)">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="small text-muted">Devices</div>
+                                    <strong>{{ user.device_count or 0 }}</strong>
+                                </div>
+                                <div class="col-4">
+                                    <div class="small text-muted">Role</div>
+                                    <strong>{{ user.role|capitalize }}</strong>
+                                </div>
+                                <div class="col-4">
+                                    <div class="small text-muted">Last Active</div>
+                                    <strong>{{ user.last_activity[:10] if user.last_activity else 'Never' }}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="col-lg-4">
+                <h4 class="section-title"><i class="fas fa-chart-pie me-2"></i>Analytics</h4>
+
+                <!-- Device Distribution Chart -->
+                <div class="chart-container">
+                    <h6>Device Categories</h6>
+                    <canvas id="categoryChart"></canvas>
+                </div>
+
+                <!-- Status Distribution Chart -->
+                <div class="chart-container">
+                    <h6>Device Status</h6>
+                    <canvas id="statusChart"></canvas>
+                </div>
+
+                <!-- Resource Usage Chart -->
+                <div class="chart-container">
+                    <h6>Resource Usage by User</h6>
+                    <canvas id="resourceChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Details Modal -->
+    <div class="modal fade" id="userModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title" id="userModalTitle">User Details</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="userModalBody">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-light" role="status"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device Log Modal -->
+    <div class="modal fade" id="deviceModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title" id="deviceModalTitle">Device Details</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="deviceModalBody">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-light" role="status"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Chart data from backend
+        const categoryData = {{ analytics.category_distribution | tojson }};
+        const statusData = {{ analytics.status_distribution | tojson }};
+        const resourceData = {{ analytics.resource_usage | tojson }};
+
+        // Category Distribution Chart
+        if (categoryData.length > 0) {
+            new Chart(document.getElementById('categoryChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: categoryData.map(d => d.category),
+                    datasets: [{
+                        data: categoryData.map(d => d.count),
+                        backgroundColor: ['#e94560', '#0f3460', '#00d9ff', '#ffc107', '#28a745']
+                    }]
+                },
+                options: {
+                    plugins: { legend: { labels: { color: '#fff' } } }
+                }
+            });
+        }
+
+        // Status Distribution Chart
+        if (statusData.length > 0) {
+            new Chart(document.getElementById('statusChart'), {
+                type: 'pie',
+                data: {
+                    labels: statusData.map(d => d.status),
+                    datasets: [{
+                        data: statusData.map(d => d.count),
+                        backgroundColor: ['#28a745', '#ffc107', '#dc3545', '#17a2b8']
+                    }]
+                },
+                options: {
+                    plugins: { legend: { labels: { color: '#fff' } } }
+                }
+            });
+        }
+
+        // Resource Usage Chart
+        if (resourceData.length > 0) {
+            new Chart(document.getElementById('resourceChart'), {
+                type: 'bar',
+                data: {
+                    labels: resourceData.map(d => d.username),
+                    datasets: [
+                        {
+                            label: 'RAM %',
+                            data: resourceData.map(d => d.ram_used_pct),
+                            backgroundColor: '#e94560'
+                        },
+                        {
+                            label: 'Storage %',
+                            data: resourceData.map(d => d.storage_used_pct),
+                            backgroundColor: '#0f3460'
+                        }
+                    ]
+                },
+                options: {
+                    scales: {
+                        y: { ticks: { color: '#fff' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                        x: { ticks: { color: '#fff' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                    },
+                    plugins: { legend: { labels: { color: '#fff' } } }
+                }
+            });
+        }
+
+        // Show User Details
+        function showUserDetails(userId) {
+            const modal = new bootstrap.Modal(document.getElementById('userModal'));
+            modal.show();
+
+            fetch(`/api/user/${userId}`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('userModalTitle').textContent = data.user.name;
+                    document.getElementById('userModalBody').innerHTML = renderUserDetails(data);
+                });
+        }
+
+        function renderUserDetails(data) {
+            const user = data.user;
+            const devices = data.devices;
+
+            let html = `
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="stats-card">
+                            <p><strong>Email:</strong> ${user.email}</p>
+                            <p><strong>Role:</strong> ${user.role}</p>
+                            <p><strong>Created:</strong> ${user.created_at}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="stats-card">
+                            <div class="stats-number">${devices.length}</div>
+                            <div>Assigned Devices</div>
+                        </div>
+                    </div>
+                </div>
+                <h5>Assigned Devices</h5>
+                <table class="table table-dark-custom table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Serial</th>
+                            <th>Category</th>
+                            <th>Status</th>
+                            <th>Condition</th>
+                            <th>Assigned</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            devices.forEach(d => {
+                html += `
+                    <tr class="device-row" onclick="showDeviceLogs(${d.id})">
+                        <td>${d.name}</td>
+                        <td><code>${d.serial}</code></td>
+                        <td>${d.category}</td>
+                        <td><span class="badge bg-${d.status === 'assigned' ? 'success' : 'warning'}">${d.status}</span></td>
+                        <td>${d.condition}</td>
+                        <td>${d.assigned_at || 'Pending'}</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            return html;
+        }
+
+        // Show Device Logs
+        function showDeviceLogs(deviceId) {
+            const modal = new bootstrap.Modal(document.getElementById('deviceModal'));
+            modal.show();
+
+            fetch(`/api/device/${deviceId}/logs`)
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('deviceModalTitle').textContent = data.device?.name || 'Device';
+                    document.getElementById('deviceModalBody').innerHTML = renderDeviceLogs(data);
+                });
+        }
+
+        function renderDeviceLogs(data) {
+            const device = data.device;
+            const logs = data.log_data;
+
+            if (!logs) {
+                return `<div class="alert alert-info">No log data available for this device.</div>`;
+            }
+
+            const memory = logs.memory || {};
+            const storage = logs.storage || {};
+            const cpu = logs.cpu || {};
+            const hardware = logs.hardware || {};
+            const location = logs.location || {};
+
+            const ramUsedPct = memory.total_ram_gb ? 
+                ((memory.total_ram_gb * 1024 - memory.available_ram_mb) / (memory.total_ram_gb * 1024) * 100).toFixed(1) : 0;
+            const storageUsedPct = storage.total_gb ? 
+                ((storage.total_gb - storage.available_gb) / storage.total_gb * 100).toFixed(1) : 0;
+
+            return `
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="stats-card mb-3">
+                            <h6><i class="fas fa-microchip me-2"></i>Hardware Info</h6>
+                            <p><strong>Manufacturer:</strong> ${hardware.manufacturer || 'N/A'}</p>
+                            <p><strong>Model:</strong> ${hardware.model || 'N/A'}</p>
+                            <p><strong>Serial:</strong> <code>${hardware.serial || 'N/A'}</code></p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="stats-card mb-3">
+                            <h6><i class="fas fa-map-marker-alt me-2"></i>Location</h6>
+                            <p><strong>GPS:</strong> ${location.gps || 'N/A'}</p>
+                            <p><strong>Last Updated:</strong> ${logs.last_updated || 'N/A'}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="stats-card mb-3">
+                            <h6><i class="fas fa-memory me-2"></i>RAM Usage</h6>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Used: ${ramUsedPct}%</span>
+                                <span>Total: ${memory.total_ram_gb?.toFixed(1) || 0} GB</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar bg-${ramUsedPct > 85 ? 'danger' : ramUsedPct > 60 ? 'warning' : 'success'}" 
+                                     style="width: ${ramUsedPct}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="stats-card mb-3">
+                            <h6><i class="fas fa-hdd me-2"></i>Storage Usage</h6>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Used: ${storageUsedPct}%</span>
+                                <span>Total: ${storage.total_gb?.toFixed(1) || 0} GB</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar bg-${storageUsedPct > 90 ? 'danger' : storageUsedPct > 75 ? 'warning' : 'success'}" 
+                                     style="width: ${storageUsedPct}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stats-card">
+                    <h6><i class="fas fa-microchip me-2"></i>CPU Info</h6>
+                    <p><strong>Processor:</strong> ${cpu.name || 'N/A'}</p>
+                    <p><strong>Cores:</strong> ${cpu.cores || 'N/A'}</p>
+                    <p><strong>Max Clock:</strong> ${cpu.max_clock_speed || 'N/A'}</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
